@@ -28,9 +28,10 @@ young_atac <- young$Peaks
 ### 2.2 Loading meta files
 For ATAC seq data, we ll need cell metadata file and the fragments files to be able using the other functio of Signac. 
 As we already talk in **2_Primary_Analysis**, this fragment file must be stored in the same folder with .tbi file to be able map the position 
+
 ```
 old_meta<- read.csv(
-  file = 'old_barcode_metrics.csv',
+  file = 'old_per_barcode_metrics.csv',
   header = TRUE,
   row.names = 1)
 young_meta<- read.csv(
@@ -40,19 +41,21 @@ young_meta<- read.csv(
 ```
 We can also store the path to our fragment files to facilitate the code writing after
 ```
-old_fragpath = "/path/to/old_atac_fragments.tsv"
-young_fragpath = "/path/to/young_atac_fragments.tsv"
+old_fragpath = "/path/to/old_atac_fragments.tsv.gz"
+young_fragpath = "/path/to/young_atac_fragments.tsv.gz"
 ```
 ### 2.3 Create Assay
 Create a Seurat object containing the RNA data first :
 ```
 so_young <-  CreateSeuratObject(
   counts = young_rna,
-  assay = "RNA"
+  assay = "RNA",
+  meta.data = young_meta
 )
 so_old <-  CreateSeuratObject(
   counts = young_rna,
-  assay = "RNA"
+  assay = "RNA",
+  meta.data = old_meta
 )
 ```
 We also need annotation for the chromatin assay
