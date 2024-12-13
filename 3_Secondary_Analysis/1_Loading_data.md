@@ -19,10 +19,10 @@ For RNA data, its correspond to genes/cell matrix
 For ATAC data, its correspond to peak/cell matrix 
 ```
 old <- Read10X_h5(filename = "old_filtered_feature_bc_matrix.h5")
-old_rna
+old_rna<- old$`Gene Expression`
 old_atac <- old$Peaks
 young <- Read10X_h5(filename = "young_filtered_feature_bc_matrix.h5")
-young_rna <- 
+young_rna <- young$`Gene Expression`
 young_atac <- young$Peaks
 ```
 ### 2.2 Loading meta files
@@ -56,12 +56,13 @@ so_old <-  CreateSeuratObject(
 )
 ```
 We also need annotation for the chromatin assay
+```
 annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
 ###Convert annotation seqlevels to UCSC style (i.e., prefix with "chr")
 seqlevels(annotations) <- paste0("chr", seqlevels(annotations))
 ###Set the genome to mm10
 genome(annotations) <- "mm10"
-
+```
 Then add ATAC assay to the object 
 ```
 so_young[["ATAC"]] <- CreateChromatinAssay(
@@ -70,6 +71,13 @@ so_young[["ATAC"]] <- CreateChromatinAssay(
   fragments = young_fragpath,
   annotation = annotations
 )
-```
 
+so_old[["ATAC"]] <- CreateChromatinAssay(
+  counts = old_atac,
+  sep = c(":", "-"),
+  fragments = old_fragpath,
+  annotation = annotations
+)
+```
+So now we can move to next part : workflow for ATAC&RNA 
 
