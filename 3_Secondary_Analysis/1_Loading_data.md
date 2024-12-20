@@ -1,5 +1,5 @@
 ## 1. Loading library 
-Make sure all packages are installed, 
+Make sure all packages are installed
 ```
 library(Signac)
 library(Seurat)
@@ -15,8 +15,8 @@ library(GenomicRanges)
 ## 2. Loading files
 ### 2.1 Loading count files
 We will use directly filtered matrix created by cellranger arc.
-For RNA data, its correspond to genes/cell matrix
-For ATAC data, its correspond to peak/cell matrix 
+For RNA data, its correspond to genes/cell matrix.
+For ATAC data, its correspond to peak/cell matrix. 
 ```
 old <- Read10X_h5(filename = "old_filtered_feature_bc_matrix.h5")
 old_rna<- old$`Gene Expression`
@@ -26,7 +26,7 @@ young_rna <- young$`Gene Expression`
 young_atac <- young$Peaks
 ```
 ### 2.2 Loading meta files
-For ATAC seq data, we ll need cell metadata file and the fragments files to be able using the other functio of Signac. 
+For ATAC seq data, we ll need cell metadata file and the fragments files to be able using the other function of Signac. 
 As we already talk in **2_Primary_Analysis**, this fragment file must be stored in the same folder with .tbi file to be able map the position 
 
 ```
