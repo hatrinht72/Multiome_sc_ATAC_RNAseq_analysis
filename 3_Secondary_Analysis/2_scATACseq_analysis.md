@@ -47,7 +47,7 @@ VlnPlot(
   ncol = 5
 )
 ```
-![2_1_ATAC_QC_metrics_young](https://github.com/user-attachments/assets/2d79cf6c-8833-4fdb-a316-77b3bf3cf572)
+![2_1_ATAC_QC_metrics_young](https://github.com/user-attachments/assets/f4755a97-90fc-448b-9b78-4aa5d086c6a1)
 
 ```
 VlnPlot(
