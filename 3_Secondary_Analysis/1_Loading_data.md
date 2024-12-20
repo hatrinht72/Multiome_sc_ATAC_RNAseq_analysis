@@ -21,30 +21,44 @@ For ATAC data, its correspond to peak/cell matrix.
 old <- Read10X_h5(filename = "old_filtered_feature_bc_matrix.h5")
 old_rna<- old$`Gene Expression`
 old_atac <- old$Peaks
+
 young <- Read10X_h5(filename = "young_filtered_feature_bc_matrix.h5")
 young_rna <- young$`Gene Expression`
 young_atac <- young$Peaks
 ```
-### 2.2 Loading meta files
-For ATAC seq data, we ll need cell metadata file and the fragments files to be able using the other function of Signac. 
-As we already talk in **2_Primary_Analysis**, this fragment file must be stored in the same folder with .tbi file to be able map the position 
+### 2.2 Files preparation
+For ATAC seq data, we will need metadata file and the fragments files to be able using the other function of Signac. 
+The fragment file must be stored in the same folder with .tbi file to be able map the position 
 
 ```
-old_meta<- read.csv(
+old_meta <- read.csv(
   file = 'old_per_barcode_metrics.csv',
   header = TRUE,
   row.names = 1)
-young_meta<- read.csv(
+
+young_meta <- read.csv(
   file = 'young_per_barcode_metrics.csv',
   header = TRUE,
   row.names = 1)
 ```
+
+To identify the peak of open chromatin region, we need a annotation for each regions, so we have to prepare our annotations data
+
+```
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+###Convert annotation seqlevels to UCSC style (i.e., prefix with "chr")
+seqlevels(annotations) <- paste0("chr", seqlevels(annotations))
+###Set the genome to mm10
+genome(annotations) <- "mm10"
+```
+
 We can also store the path to our fragment files to facilitate the code writing after
 ```
 old_fragpath = "/path/to/old_atac_fragments.tsv.gz"
 young_fragpath = "/path/to/young_atac_fragments.tsv.gz"
 ```
-### 2.3 Create Assay
+
+### 2.3 Create Seurat object
 Create a Seurat object containing the RNA data first :
 ```
 so_young <-  CreateSeuratObject(
@@ -52,19 +66,12 @@ so_young <-  CreateSeuratObject(
   assay = "RNA",
   meta.data = young_meta
 )
+
 so_old <-  CreateSeuratObject(
   counts = young_rna,
   assay = "RNA",
   meta.data = old_meta
 )
-```
-We also need annotation for the chromatin assay
-```
-annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
-###Convert annotation seqlevels to UCSC style (i.e., prefix with "chr")
-seqlevels(annotations) <- paste0("chr", seqlevels(annotations))
-###Set the genome to mm10
-genome(annotations) <- "mm10"
 ```
 Then add ATAC assay to the object 
 ```
