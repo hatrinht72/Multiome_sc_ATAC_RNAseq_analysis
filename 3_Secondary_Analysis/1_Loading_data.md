@@ -19,12 +19,8 @@ For RNA data, its correspond to genes/cell matrix.
 For ATAC data, its correspond to peak/cell matrix. 
 ```
 old <- Read10X_h5(filename = "old_filtered_feature_bc_matrix.h5")
-old_rna<- old$`Gene Expression`
-old_atac <- old$Peaks
 
 young <- Read10X_h5(filename = "young_filtered_feature_bc_matrix.h5")
-young_rna <- young$`Gene Expression`
-young_atac <- young$Peaks
 ```
 #### 1.2.2 Files preparation
 For ATAC seq data, we will need metadata file and the fragments files to be able using the other function of Signac. 
@@ -76,14 +72,14 @@ so_old <-  CreateSeuratObject(
 Then add ATAC assay to the object 
 ```
 so_young[["ATAC"]] <- CreateChromatinAssay(
-  counts = young_atac,
+  counts = young$Peaks,
   sep = c(":", "-"),
   fragments = young_fragpath,
   annotation = annotations
 )
 
 so_old[["ATAC"]] <- CreateChromatinAssay(
-  counts = old_atac,
+  counts = old$Peaks,
   sep = c(":", "-"),
   fragments = old_fragpath,
   annotation = annotations
