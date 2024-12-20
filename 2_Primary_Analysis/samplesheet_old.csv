@@ -1,0 +1,4 @@
+fastqs,sample,library_type
+/beegfs/ttrinh/scatacseq/gex/00_fastq/,MAP17-cDNA-old,Gene Expression
+/beegfs/ttrinh/scatacseq/atac/,ATAC-old,Chromatin Accessibility
+
