@@ -1,4 +1,4 @@
-## 1. Loading library 
+### 1.1 Loading library 
 Make sure all packages are installed
 ```
 library(Signac)
@@ -12,8 +12,8 @@ library(GenomeInfoDb)
 library(EnsDb.Mmusculus.v79)#EnsDb.Hsapiens.v86 for human 
 library(GenomicRanges)
 ```
-## 2. Loading files
-### 2.1 Loading count files
+### 1.2 Loading files
+#### 1.2.1 Loading count files
 We will use directly filtered matrix created by cellranger arc.
 For RNA data, its correspond to genes/cell matrix.
 For ATAC data, its correspond to peak/cell matrix. 
@@ -26,7 +26,7 @@ young <- Read10X_h5(filename = "young_filtered_feature_bc_matrix.h5")
 young_rna <- young$`Gene Expression`
 young_atac <- young$Peaks
 ```
-### 2.2 Files preparation
+#### 1.2.2 Files preparation
 For ATAC seq data, we will need metadata file and the fragments files to be able using the other function of Signac. 
 The fragment file must be stored in the same folder with .tbi file to be able map the position 
 
@@ -58,7 +58,7 @@ old_fragpath = "/path/to/old_atac_fragments.tsv.gz"
 young_fragpath = "/path/to/young_atac_fragments.tsv.gz"
 ```
 
-### 2.3 Create Seurat object
+#### 1.2.3 Create Seurat object
 Create a Seurat object containing the RNA data first :
 ```
 so_young <-  CreateSeuratObject(
