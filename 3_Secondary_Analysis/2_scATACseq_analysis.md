@@ -13,18 +13,28 @@ To filter scATACseq data, there is several parameters to look after :
 - Ratio reads in genomic blacklist regions : reads which are often represent low-quality cells/technical artifacts. Access the proportion of reads that map to regions defined as "blacklisted.", consisting problematic genomic regions, often due to high background noise or sequencing artifacts, and should be considered with caution when interpreting results
 
 ```
-so_young <- NucleosomeSignal(object = so_young) #fragment ratio 147-294: <147
-so_old <- NucleosomeSignal(object = so_old) #fragment ratio 147-294: <147
+so_young <- NucleosomeSignal(so_young) #fragment ratio 147-294: <147
+so_old <- NucleosomeSignal(so_old) #fragment ratio 147-294: <147
 
 so_young <- TSSEnrichment(object = so_young, fast = FALSE)
 so_old <- TSSEnrichment(object = so_old, fast = FALSE)
 
-so_young$blacklist_ratio <- so_young$blacklist_region_fragments / so_young$peak_region_fragments
-so_old$blacklist_ratio <- so_old$blacklist_region_fragments / so_old$peak_region_fragments
+so_young$blacklist_fraction <- FractionCountsInRegion(
+  object = so_young, 
+  assay = 'ATAC',
+  regions = blacklist_mm10
+)
+so_old$blacklist_fraction <- FractionCountsInRegion(
+  object = so_old, 
+  assay = 'ATAC',
+  regions = blacklist_mm10
+)
+
+##Number of fragments (or reads) that map to specific accessible regions (peaks)
 old_data_atac$atac_peak_region_fragments 
 
-so_young$pct_reads_in_peaks <- so_young$peak_region_fragments / so_young$passed_filters * 100 
-so_oldg$pct_reads_in_peaks <- so_oldg$peak_region_fragments / so_oldg$passed_filters * 100 
+so_young$pct_reads_in_peaks <- so_young$atac_peak_region_fragments / so_young$atac_fragments * 100
+so_old$pct_reads_in_peaks <- so_old$atac_peak_region_fragments / so_old$atac_fragments * 100
 ```
 
 we can then visualize all these parameter by violin plot.
@@ -32,18 +42,68 @@ we can then visualize all these parameter by violin plot.
 ```
 VlnPlot(
   object = so_young,
-  features = c('atac_peak_region_fragments', 'pct_reads_in_peaks', 
-               'blacklist_ratio', 'nucleosome_signal', 'TSS.enrichment'),
-  pt.size = 0.1,
-  ncol = 5
-)
-
-VlnPlot(
-  object = so_old,
-  features = c('atac_peak_region_fragments', 'pct_reads_in_peaks', 
-               'blacklist_ratio', 'nucleosome_signal', 'TSS.enrichment'),
+  features = c('atac_peak_region_fragments',  'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks'),
   pt.size = 0.1,
   ncol = 5
 )
 ```
+![2_1_ATAC_QC_metrics_young](https://github.com/user-attachments/assets/2d79cf6c-8833-4fdb-a316-77b3bf3cf572)
 
+```
+VlnPlot(
+  object = so_old,
+  features = c('atac_peak_region_fragments',  'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks'),
+  pt.size = 0.1,
+  ncol = 5
+)
+```
+we can also visualize the relationship between variables.
+```
+png(paste0(OUT_DIR, "2_1_ATAC_relation_count_tss_young.png"), res = 150,width = 1000, height = 1000 )
+DensityScatter(so_young, x = 'nCount_ATAC', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
+dev.off()
+```
+
+![2_1_ATAC_relation_count_tss_young](https://github.com/user-attachments/assets/28ad481f-9973-4d1a-99a7-bb59721e3ab5)
+
+### 2.2 Filtering 
+
+Then we can set some thredshold to filtering data by these parameters. I will keep only the most 98% abundant of these parameters.
+```
+low_prf <- quantile(so_young[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.02)
+hig_prf <- quantile(so_young[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.98)
+low_prp <- quantile(so_young[["pct_reads_in_peaks"]]$pct_reads_in_peaks, probs = 0.02)
+high_blr <- quantile(so_young[["blacklist_fraction"]]$blacklist_fraction, probs = 0.98)
+hig_ns <- quantile(so_young[["nucleosome_signal"]]$nucleosome_signal, probs = 0.98)
+low_ts <- quantile(so_young[["TSS.enrichment"]]$TSS.enrichment, probs = 0.02)
+
+
+low_prf <- quantile(so_old[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.02)
+hig_prf <- quantile(so_old[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.98)
+low_prp <- quantile(so_old[["pct_reads_in_peaks"]]$pct_reads_in_peaks, probs = 0.02)
+high_blr <- quantile(so_old[["blacklist_fraction"]]$blacklist_fraction, probs = 0.98)
+hig_ns <- quantile(so_old[["nucleosome_signal"]]$nucleosome_signal, probs = 0.98)
+low_ts <- quantile(so_old[["TSS.enrichment"]]$TSS.enrichment, probs = 0.02)
+```
+then we can filter our data
+```
+#fa = filtered atac
+so_fa_old <- subset(
+  x = so_old,
+  subset = atac_peak_region_fragments > low_prf &
+    atac_peak_region_fragments < hig_prf &
+    pct_reads_in_peaks > low_prp &
+    blacklist_fraction < high_blr &
+    nucleosome_signal < hig_ns &
+    TSS.enrichment > low_ts
+)
+so_fa_young <- subset(
+  x = so_young,
+  subset = atac_peak_region_fragments > low_prf &
+    atac_peak_region_fragments < hig_prf &
+    pct_reads_in_peaks > low_prp &
+    blacklist_fraction < high_blr &
+    nucleosome_signal < hig_ns &
+    TSS.enrichment > low_ts
+)
+```
