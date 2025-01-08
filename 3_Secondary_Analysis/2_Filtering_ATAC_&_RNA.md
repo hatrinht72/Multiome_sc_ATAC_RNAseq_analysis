@@ -1,10 +1,12 @@
-## 2. scATACseq analysis workflow
-Since in our Seurat object now we have 2 assays so to do control quality for ATAC assay, we have to choose the default assay
+## 2. Filtering ATAC and RNA
+We can first clean our data then analyze independently ATAC and RNA 
+We can start with ATAC 
+### 2.1 ATAC metrics
+We have to set our default assay first
 ```
 DefaultAssay(so_young) <- "ATAC"
 DefaultAssay(so_old) <- "ATAC"
 ```
-### 2.1 QC metrics
 To filter scATACseq data, there is several parameters to look after :
 - Nucleosome bandng pattern : to make sure we have the right DNA fragment size, corresponding to the length of the DNA wrapped around a single nucleosome (147 pb) and to assess the signal from nucleosome positioning based on the fragment length distribution from the ATAC-seq data. The nucleosome_signal will store the value of the appromimate ratio of mononucleosomam and nucleosome-free fragments
 - Transcriptional start site (TSS) enrichnment score : to assess the enrichment of transcription start sites (TSS) in ATAC-seq data, calculates TSS enrichment scores, which help determine the degree to which TSS regions are accessible in your chromatin accessibility data. Poor scATAC seq experiments would have low TSS enrichment score
