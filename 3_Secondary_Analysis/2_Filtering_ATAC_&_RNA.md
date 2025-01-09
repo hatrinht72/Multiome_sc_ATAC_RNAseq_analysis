@@ -1,5 +1,5 @@
 ## 2. Filtering ATAC and RNA
-We can first clean our data then analyze independently ATAC and RNA 
+We can first clean our data then analyze independently ATAC and RNA.
 We can start with ATAC 
 ### 2.1 ATAC metrics
 We have to set our default assay first
@@ -65,10 +65,15 @@ png(paste0(OUT_DIR, "2_1_ATAC_relation_count_tss_young.png"), res = 150,width = 
 DensityScatter(so_young, x = 'nCount_ATAC', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
 dev.off()
 ```
-
 ![2_1_ATAC_relation_count_tss_young](https://github.com/user-attachments/assets/28ad481f-9973-4d1a-99a7-bb59721e3ab5)
 
-### 2.2 Filtering 
+### 2.2 RNA metrics
+We can also visualize the RNA data.
+
+
+![2_2_RNA_QC_metrics_young](https://github.com/user-attachments/assets/cfe4ce13-f0b5-4120-b41a-8469b3f8a3b8)
+
+### 2.3 Filtering 
 
 Then we can set some thredshold to filtering data by these parameters. I will keep only the most 98% abundant of these parameters.
 ```
