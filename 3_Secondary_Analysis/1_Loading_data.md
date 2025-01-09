@@ -18,9 +18,10 @@ We will use directly filtered matrix created by cellranger arc.
 For RNA data, its correspond to genes/cell matrix.
 For ATAC data, its correspond to peak/cell matrix. 
 ```
-old <- Read10X_h5(filename = "old_filtered_feature_bc_matrix.h5")
+INPUT_DIR <- "/path/to/directory/"
+old <- Read10X_h5(filename = paste0(INPUT_DIR,file= "old_filtered_feature_bc_matrix.h5"))
 
-young <- Read10X_h5(filename = "young_filtered_feature_bc_matrix.h5")
+young <- Read10X_h5(filename = paste0(INPUT_DIR,file="young_filtered_feature_bc_matrix.h5"))
 ```
 #### 1.2.2 Files preparation
 For ATAC seq data, we will need metadata file and the fragments files to be able using the other function of Signac. 
@@ -28,12 +29,12 @@ The fragment file must be stored in the same folder with .tbi file to be able ma
 
 ```
 old_meta <- read.csv(
-  file = 'old_per_barcode_metrics.csv',
+  paste0(INPUT_DIR,file = 'old_per_barcode_metrics.csv'),
   header = TRUE,
   row.names = 1)
 
 young_meta <- read.csv(
-  file = 'young_per_barcode_metrics.csv',
+  paste0(INPUT_DIR,file = 'young_per_barcode_metrics.csv'),
   header = TRUE,
   row.names = 1)
 ```
@@ -46,27 +47,31 @@ annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
 seqlevels(annotations) <- paste0("chr", seqlevels(annotations))
 ###Set the genome to mm10
 genome(annotations) <- "mm10"
+#Save the annotations dataset to be able to use it directly next time
+save(annotations,paste0(INPUT_DIR, file="annotations_mm10.rds")) 
 ```
 
 We can also store the path to our fragment files to facilitate the code writing after
 ```
-old_fragpath = "/path/to/old_atac_fragments.tsv.gz"
-young_fragpath = "/path/to/young_atac_fragments.tsv.gz"
+old_fragpath = paste0(INPUT_DIR,file="old_atac_fragments.tsv.gz")
+young_fragpath = paste0(INPUT_DIR,file="young_atac_fragments.tsv.gz")
 ```
 
 #### 1.2.3 Create Seurat object
 Create a Seurat object containing the RNA data first :
 ```
-so_young <-  CreateSeuratObject(
-  counts = young_rna,
+so_old<- CreateSeuratObject(
+  counts = old$`Gene Expression`,
   assay = "RNA",
-  meta.data = young_meta
+  meta.data = old_meta,
+  project="Old_wk4"
 )
 
-so_old <-  CreateSeuratObject(
-  counts = young_rna,
+so_young <- CreateSeuratObject(
+  counts = young$`Gene Expression`,
   assay = "RNA",
-  meta.data = old_meta
+  meta.data = young_meta,
+  project="Young_wk4",
 )
 ```
 Then add ATAC assay to the object 
@@ -85,5 +90,5 @@ so_old[["ATAC"]] <- CreateChromatinAssay(
   annotation = annotations
 )
 ```
-So now we can move to next part : workflow for ATAC&RNA 
+So now we can move to next part : Filtering 
 
