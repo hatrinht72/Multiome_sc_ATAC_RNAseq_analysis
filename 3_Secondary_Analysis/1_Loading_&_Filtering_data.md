@@ -1,4 +1,4 @@
-![1_3_2_RNA_QC_count_feature_young](https://github.com/user-attachments/assets/58dd9334-0098-43a7-a670-518d11b1a1d4)### 1.1 Loading library 
+### 1.1 Loading library 
 Make sure all packages are installed
 ```
 library(Signac)
