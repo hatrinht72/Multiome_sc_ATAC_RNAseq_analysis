@@ -1,18 +1,42 @@
-### 1.1 Loading library 
+# Tutorial of single-cell Multiome sequencing in R 
+### Table of content 
+ * [Section 1. Mono-modal data analysis of the scMultiome data](#section-1-mono-modal-data-analysis-of-the-scmultiome-data)
+   * [0. Import the required packages](#0-import-the-required-packages)
+   * [1. Data Loading & Seurat Object creating](#1-load-the-data-and-create-the-seurat-object)
+     * [1.1. RNA](#11-RNA)
+     * [1.2. ATAC](#12-ATAC)
+         * [1.2.1 Create a common peak set](#121-create-a-common-peak-set)
+         * [1.2.2 Create fragment objects](#122-create-fragment-objects)
+         * [1.2.3 Quantify peaks in each dataset](#123-quantify-peak-in-each-dataset)
+         * [1.2.4 Create chromatin assay](#124-create-chromatin-assay)
+           
+   * [Step 2. Quality control](#step-2-quality-control)
+   * [Step 3. Analysis on the RNA assay](#step-3-analysis-on-the-rna-assay)
+   * [Step 4. Analysis on the ATAC assay](#step-4-analysis-on-the-atac-assay)
+     * [Step 4.1. Feature selection](#step-41-feature-selection)
+     * [Step 4.2. Normalization](#step-42-normalization)
+     * [Step 4.3. Linear dimension reduction](#step-43-linear-dimension-reduction)
+     * [Step 4.4. Non-linear dimension reduction with UMAP for visualization](#step-44-non-linear-dimension-reduction-with-umap-for-visualization)
+     * [Step 4.O. What if we don't have the RNA information](#step-4o-what-if-we-dont-have-the-rna-information)
+     * [Step 4.5. Data integration of the ATAC assay](#step-45-data-integration-of-the-atac-assay)
+ * [Section 2. Bi-modal integrative analysis of the RNA-ATAC scMultiome data](#section-2-bi-modal-integrative-analysis-of-the-rna-atac-scmultiome-data)
+   * [Step 1. Weighted nearest neighbor analysis](#step-1-weighted-nearest-neighbor-analysis)
+   * [Step 2. Cell type gene/peak marker identification and visualization of the chromatin accessibility profiles](#step-2-cell-type-genepeak-marker-identification-and-visualization-of-the-chromatin-accessibility-profiles)
+   * [Step 3. TF binding motif enrichment analysis](#step-3-tf-binding-motif-enrichment-analysis)
+   * [Step 4. ChromVAR: another motif enrichment analysis](#step-4-chromvar-another-motif-enrichment-analysis)
+ * [Section 3. Gene regulatory network reconstruction](#section-3-gene-regulatory-network-reconstruction)
+
+
+
+
+### 0 Import the required packages 
 Make sure all packages are installed
-```
+```R
 library(Signac)
 library(Seurat)
-library(SeuratObject)
-library(hdf5r)
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-library(GenomeInfoDb)
-library(EnsDb.Mmusculus.v79)#EnsDb.Hsapiens.v86 for human 
 library(GenomicRanges)
 ```
-### 1.2 Loading files
+### 1.1 Loading data
 #### 1.2.1 Loading count files
 We will use directly filtered matrix created by cellranger arc.
 For RNA data, its correspond to genes/cell matrix.
