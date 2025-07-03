@@ -1,15 +1,19 @@
 # Tutorial of single-cell Multiome sequencing in R 
 ### Table of content 
- * [Section 1. Mono-modal data analysis of the scMultiome data](#section-1-mono-modal-data-analysis-of-the-scmultiome-data)
+ * [Section 1. Mono-modal data analysis](#section-1-mono-modal-data-analysis)
    * [0. Import the required packages](#0-import-the-required-packages)
    * [1. Load the data and create Seurat object](#1-load-the-data-and-create-seurat-object)
      * [1.1. RNA](#11-RNA)
      * [1.2. ATAC](#12-ATAC)
          * [1.2.1 Create a common peak set](#121-create-a-common-peak-set)
-         * [1.2.2 Create fragment objects](#122-create-fragment-objects)
-         * [1.2.3 Quantify peaks in each dataset](#123-quantify-peak-in-each-dataset)
-         * [1.2.4 Create chromatin assay](#124-create-chromatin-assay)
-  
+         * [1.2.2 Quantify peaks in each dataset](#122-quantify-peak-in-each-dataset)
+         * [1.2.3 Create chromatin assay](#123-create-chromatin-assay)
+   * [2. Data filtering](#2-data-filtering)
+     * [2.1. ATAC metrics](#21-ATAC-metrics)
+     * [2.2. RNA metrics](#22-RNA-metrics)
+     * [2.3. Filtering](#23-Filtering)
+
+## Section 1 : Mono-modal data analysis  
 ### 0. Import the required packages 
 We can use a variety of tools to analyze single cell sequencing data, depending on the language we choose and the type of data we wish to examine. Seurat and Signac on R were selected for this tutorial due of their improvements, extensive documentation, and beginner-friendly nature. 
 ```R
@@ -25,7 +29,7 @@ OUTPUT_DIR ="/path/to/the/results/"
 ### 1 Load the data and create Seurat object
 #### 1.1. RNA
 Cellranger ARC immediately generates RNA data that correlates to the genes and cell matrix and ATAC data that correlates to the peaks and cell matrix. With low-quality cells and genes/peaks removed, they offer the raw and filtered matrix. 
-We can do the filtering on our own by combining multiple tools, such as [DoubletFinder] (https://github.com/chris-mcginnis-ucsf/DoubletFinder) for gene expression level, [Amulet] (https://github.com/UcarLab/AMULET) for chromatin accessibility information, and [EmptyDropsMultiome] (https://github.com/MarioniLab/EmptyDropsMultiome) to identify low quality droplets (empty droplets) after sequencing.
+We can do the filtering on our own by combining multiple tools, such as [DoubletFinder](https://github.com/chris-mcginnis-ucsf/DoubletFinder) for gene expression level, [Amulet](https://github.com/UcarLab/AMULET) for chromatin accessibility information, and [EmptyDropsMultiome](https://github.com/MarioniLab/EmptyDropsMultiome) to identify low quality droplets (empty droplets) after sequencing.
 The directly filtered matrix produced by Cellranger Arc will be used in this case.
 In addition to importing the filtered matrix for each dataset—old and young—we will first load the meta data, which includes comprehensive information for each modality sequencing result.  
 ```R
@@ -92,14 +96,44 @@ gr <- makeGRangesFromDataFrame(peaks)
 gr.old <- makeGRangesFromDataFrame(peaks.old)
 gr.young <- makeGRangesFromDataFrame(peaks.young)
 ```
-
-How ever, one crucial point is the fragment file must be stored in the same folder with .tbi file to be able map the position.
+Now we can combine them to get a unified set of peaks to quantify in each dataset later on, also process the filtering bad peaks based on length. 
+```R
+combined.peaks <- reduce(x = c(gr, gr.old, gr.young))
+# Filter out bad peaks based on length
+peakwidths <- width(combined.peaks)
+combined.peaks <- combined.peaks[peakwidths  < 10000 & peakwidths > 20]
 ```
 
+##### 1.2.2 Quantify peaks object in each dataset
+Now we have the common set of peak, we can generate new matrix count (peak/cells) for each dataset
+First we gonna need to create the fragment objects to store fragment file information. One crucial point is the fragment file must be stored in the same folder with .tbi file to be able map the position.
+
+```R
+frags.old <- CreateFragmentObject(
+  path = paste0(INPUT_DIR,"old_atac_fragments.tsv.gz"),
+  cells = colnames(so_old)
+)
+
+frags.young <- CreateFragmentObject(
+  path = paste0(INPUT_DIR,"young_atac_fragments.tsv.gz"),
+  cells = colnames(so_young)
 ```
+Then we can process the peak quantification. 
+```R
+old.counts <- FeatureMatrix(
+  fragments = frags.old,
+  features = combined.peaks,
+  cells = colnames(so_old)
+)
 
-To identify the peak of open chromatin region, we need a annotation for each regions, so we have to prepare our annotations data
-
+young.counts <- FeatureMatrix(
+  fragments = frags.young,
+  features = combined.peaks,
+  cells = colnames(so_young)
+)
+```
+Another important information is the annotation for each regions detected in our common peak. 
+The annotations can contain the gene coded by the regions, or the non coding elements. 
 ```
 annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
 ###Convert annotation seqlevels to UCSC style (i.e., prefix with "chr")
@@ -109,53 +143,30 @@ genome(annotations) <- "mm10"
 #Save the annotations dataset to be able to use it directly next time
 save(annotations,paste0(INPUT_DIR, file="annotations_mm10.rds")) 
 ```
-We can also store the path to our fragment files to facilitate the code writing after
-```
-old_fragpath = paste0(INPUT_DIR,file="old_atac_fragments.tsv.gz")
-young_fragpath = paste0(INPUT_DIR,file="young_atac_fragments.tsv.gz")
-```
-
-#### 1.2.3 Create Seurat object
-Create a Seurat object containing the RNA data first :
-```
-so_old<- CreateSeuratObject(
-  counts = old$`Gene Expression`,
-  assay = "RNA",
-  meta.data = old_meta,
-  project="Old_wk4"
-)
-
-so_young <- CreateSeuratObject(
-  counts = young$`Gene Expression`,
-  assay = "RNA",
-  meta.data = young_meta,
-  project="Young_wk4",
-)
-```
-Then add ATAC assay to the object 
-```
-so_young[["ATAC"]] <- CreateChromatinAssay(
-  counts = young$Peaks,
+##### 1.2.3 Create chromatin assay
+Now we can add chromatin assay on our Seurat object that we cretaed before with RNA assay
+```R
+so_old[["ATAC"]] <- CreateChromatinAssay(
+  counts = old.counts,
   sep = c(":", "-"),
-  fragments = young_fragpath,
+  fragments = frags.old,
   annotation = annotations
 )
-
-so_old[["ATAC"]] <- CreateChromatinAssay(
-  counts = old$Peaks,
+so_young[["ATAC"]] <- CreateChromatinAssay(
+  counts = young.counts,
   sep = c(":", "-"),
-  fragments = old_fragpath,
+  fragments = frags.young,
   annotation = annotations
 )
 ```
 So now we can move to next part : Filtering 
 
-### 1.3 Filtering ATAC and RNA
-We can first clean our data then analyze independently ATAC and RNA.
-We can start with ATAC 
-#### 1.3.1 ATAC metrics
-We have to set our default assay first
-```
+### 2. Data filtering
+We can first clean our datasets independently.
+
+#### 2.1 ATAC metrics
+Since now in our Seurat object, we have 2 assays (RNA and ATAC), so we have to set our default assay first
+```R
 DefaultAssay(so_young) <- "ATAC"
 DefaultAssay(so_old) <- "ATAC"
 ```
@@ -165,8 +176,7 @@ To filter scATACseq data, there is several parameters to look after :
 - Total number of fragments in peaks : mesure depth sequencing; identify the number of fragments (or reads) that map to specific accessible regions (peaks)
 - Fraction of reads in peaks : all fragments that fall within ATAC-seq peaks, access the total number of reads that passed quality control filters during preprocessing
 - Ratio reads in genomic blacklist regions : reads which are often represent low-quality cells/technical artifacts. Access the proportion of reads that map to regions defined as "blacklisted.", consisting problematic genomic regions, often due to high background noise or sequencing artifacts, and should be considered with caution when interpreting results
-
-```
+```R
 so_young <- NucleosomeSignal(so_young) #fragment ratio 147-294: <147
 so_old <- NucleosomeSignal(so_old) #fragment ratio 147-294: <147
 
@@ -185,104 +195,55 @@ so_old$blacklist_fraction <- FractionCountsInRegion(
 )
 
 ##Number of fragments (or reads) that map to specific accessible regions (peaks)
-old_data_atac$atac_peak_region_fragments 
-
 so_young$pct_reads_in_peaks <- so_young$atac_peak_region_fragments / so_young$atac_fragments * 100
 so_old$pct_reads_in_peaks <- so_old$atac_peak_region_fragments / so_old$atac_fragments * 100
 ```
-
-we can then visualize all these parameter by violin plot.
-
+#### 2.2 RNA metrics
+For RNA data, we gonna add a new observation called mitochondrial percentage, to estimate the contamination of mitochondrial gene captured by the sequencing. The cells with high mitochondrial percent could be considered as low quality. We can also look into ribosome gene. 
+```R
+DefaultAssay(so_old) <-"RNA"
+DefaultAssay(so_young) <-"RNA"
+so_old[["percent.mt"]] <- PercentageFeatureSet(so_old, pattern = "^mt-")
+so_young[["percent.mt"]] <- PercentageFeatureSet(so_young, pattern = "^mt-")
 ```
-png(paste0(OUT_DIR, "1_3_1_ATAC_QC_metrics_young.png"), res = 150, width = 2000, height = 1000 )
-VlnPlot(
-  object = so_young,
-  features = c('atac_peak_region_fragments',  'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks'),
-  pt.size = 0.1,
-  ncol = 5
-)
-dev.off()
-```
-![2_1_ATAC_QC_metrics_young](https://github.com/user-attachments/assets/f76bab2a-a3ba-48e0-ae07-7730128a2c49)
-
-```
-png(paste0(OUT_DIR, "1_3_1_ATAC_QC_metrics_old.png"), res = 150, width = 2000, height = 1000 )
+By this step, we can save our data to be able to try different filtering 
+#### 2.3 Filtering
+we can fist visualize the data before filtering 
+```R
 VlnPlot(
   object = so_old,
-  features = c('atac_peak_region_fragments',  'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks'),
+  features = c('nCount_ATAC', 'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks','nCount_RNA','nFeature_RNA','percent.mt'),
   pt.size = 0.1,
   ncol = 5
 )
-dev.off()
+VlnPlot(
+  object = so_young,
+  features = c('nCount_ATAC', 'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks','nCount_RNA','nFeature_RNA','percent.mt'),
+  pt.size = 0.1,
+  ncol = 5
+)
 ```
-![1_3_1_ATAC_QC_metrics_old](https://github.com/user-attachments/assets/89af65be-3417-494e-a63b-c425addc1f2f)
-
-we can also visualize the relationship between variables.
-```
-png(paste0(OUT_DIR, "1_3_1_ATAC_relation_count_tss_young.png"), res = 150,width = 1000, height = 1000 )
-DensityScatter(so_young, x = 'nCount_ATAC', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
-dev.off()
-```
-![2_1_ATAC_relation_count_tss_young](https://github.com/user-attachments/assets/28ad481f-9973-4d1a-99a7-bb59721e3ab5)
-
-```
-png(paste0(OUT_DIR, "1_3_1_ATAC_relation_count_tss_old.png"), res = 150,width = 1000, height = 1000 )
-DensityScatter(so_old, x = 'nCount_ATAC', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
-dev.off()
-```
-![1_3_1_ATAC_relation_count_tss_old](https://github.com/user-attachments/assets/0608d5e2-c540-418a-b480-763baf8f1568)
-
-#### 1.3.2 RNA metrics
-We can also visualize the RNA data.
-```
-png(paste0(OUT_DIR, "1_3_2_QC_RNA_young.png"), width = 1200, height = 1000, res = 150)
-VlnPlot(so_young, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
-dev.off()
-```
-![1_3_2_RNA_QC_vinplot_young](https://github.com/user-attachments/assets/57bbd2c9-5d6a-4ec0-b931-e625bb1dfaa0)
-```
-png(paste0(OUT_DIR, "1_3_2_QC_RNA_old.png"), width = 1200, height = 1000, res = 150)
-VlnPlot(so_old, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
-dev.off()
-```
-![1_3_2_RNA_QC_vinplot_old](https://github.com/user-attachments/assets/298b6dad-c53e-4e06-8d3e-53585d1a37c3)
+We can also check the number of cells before filtering 
+```R
+length(colnames(so_old))
+[1] 20000
+length(colnames(so_young))
+[1] 20000
 
 ```
-png(paste0(OUT_DIR, "1_3_2_RNA_QC_scatter_young.png"), width = 1200, height = 1000, res = 150)
-FeatureScatter(so_young, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
-dev.off()
-```
-![1_3_2_RNA_QC_count_feature_young](https://github.com/user-attachments/assets/82bda713-9467-4404-851a-9a03392168e6)
-
-```
-png(paste0(OUT_DIR, "1_3_2_RNA_QC_scatter_old.png"), width = 1200, height = 1000, res = 150)
-FeatureScatter(so_old, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
-dev.off()
-```
-![1_3_2_RNA_QC_scatter_old](https://github.com/user-attachments/assets/1dcfa85d-c285-4709-a028-44566840bce2)
-
-You can save now the object in case of you want to try different way to filter the cells
-```
-save(so_young, file="so_young")
-save(so_old, file="so_old")
-
-```
-
-#### 1.3.3 Filtering 
-##### 1.3.3.1 Set the thredshold
+We can use some parameter proposed by Seurat, but we can also identify the threshold for each parameter on our own
 Then we can set some thredshold to filtering data by these parameters. I will keep only the most 98% abundant of these parameters.
-```
+```R
 #ATAC
-low_prf <- quantile(so_young[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.02)
-hig_prf <- quantile(so_young[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.98)
+low_prf <- quantile(so_young[["nCount_ATAC"]]$nCount_ATAC, probs = 0.02)
+hig_prf <- quantile(so_young[["nCount_ATAC"]]$nCount_ATAC, probs = 0.98)
 low_prp <- quantile(so_young[["pct_reads_in_peaks"]]$pct_reads_in_peaks, probs = 0.02)
 high_blr <- quantile(so_young[["blacklist_fraction"]]$blacklist_fraction, probs = 0.98)
 hig_ns <- quantile(so_young[["nucleosome_signal"]]$nucleosome_signal, probs = 0.98)
 low_ts <- quantile(so_young[["TSS.enrichment"]]$TSS.enrichment, probs = 0.02)
 
-
-low_prf <- quantile(so_old[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.02)
-hig_prf <- quantile(so_old[["atac_peak_region_fragments"]]$atac_peak_region_fragments, probs = 0.98)
+low_prf <- quantile(so_old[["nCount_ATAC"]]$nCount_ATAC, probs = 0.02)
+hig_prf <- quantile(so_old[["nCount_ATAC"]]$nCount_ATAC, probs = 0.98)
 low_prp <- quantile(so_old[["pct_reads_in_peaks"]]$pct_reads_in_peaks, probs = 0.02)
 high_blr <- quantile(so_old[["blacklist_fraction"]]$blacklist_fraction, probs = 0.98)
 hig_ns <- quantile(so_old[["nucleosome_signal"]]$nucleosome_signal, probs = 0.98)
@@ -291,43 +252,47 @@ low_ts <- quantile(so_old[["TSS.enrichment"]]$TSS.enrichment, probs = 0.02)
 #RNA
 low_nCountRNA  <- quantile(so_young[["nCount_RNA"]]$nCount_RNA, probs = 0.02)
 hig_nCountRNA <- quantile(so_young[["nCount_RNA"]]$nCount_RNA, probs = 0.98)
+low_nFeatureRNA  <- quantile(so_young[["nFeature_RNA"]]$nFeature_RNA, probs = 0.02)
+hig_nFeatureRNA <- quantile(so_young[["nFeature_RNA"]]$nFeature_RNA, probs = 0.98)
+low_mt  <- quantile(so_young[["percent.mt"]]$percent.mt, probs = 0.02)
+hig_mt <- quantile(so_young[["percent.mt"]]$percent.mt, probs = 0.98)
 
 low_nCountRNA  <- quantile(so_old[["nCount_RNA"]]$nCount_RNA, probs = 0.02)
 hig_nCountRNA <- quantile(so_old[["nCount_RNA"]]$nCount_RNA, probs = 0.98)
+low_nFeatureRNA  <- quantile(so_old[["nFeature_RNA"]]$nFeature_RNA, probs = 0.02)
+hig_nFeatureRNA <- quantile(so_old[["nFeature_RNA"]]$nFeature_RNA, probs = 0.98)
+low_mt  <- quantile(so_old[["percent.mt"]]$percent.mt, probs = 0.02)
+hig_mt <- quantile(so_old[["percent.mt"]]$percent.mt, probs = 0.98)
 ```
-##### 1.3.3.2 Filter 
-```
-so_old_filtered <- subset(
-  x = so_old,
-  subset = atac_peak_region_fragments > low_prf &
-    atac_peak_region_fragments < hig_prf &
-    pct_reads_in_peaks > low_prp &
-    blacklist_fraction < high_blr &
-    nucleosome_signal < hig_ns &
-    TSS.enrichment > low_ts &
-    nCount_RNA < hig_nCountRNA &
-    nCount_RNA > low_nCountRNA &
-    nFeature_RNA < hig_nFeatureRNA &
-    nFeature_RNA > low_nFeatureRNA
-)
-
-so_young_filtered <- subset(
-  x = so_young,
-  subset = atac_peak_region_fragments > low_prf &
-    atac_peak_region_fragments < hig_prf &
-    pct_reads_in_peaks > low_prp &
-    blacklist_fraction < high_blr &
-    nucleosome_signal < hig_ns &
-    TSS.enrichment > low_ts &
-    nCount_RNA < hig_nCountRNA &
-    nCount_RNA > low_nCountRNA &
-    nFeature_RNA < hig_nFeatureRNA &
-    nFeature_RNA > low_nFeatureRNA
+Now we can first vizualize our data after filtering 
+```R
+VlnPlot(
+  object = subset(x=so_young,
+                  subset = nCount_ATAC > low_prf &
+                    nCount_ATAC < hig_prf &
+                    pct_reads_in_peaks > low_prp &
+                    blacklist_fraction < high_blr &
+                    nucleosome_signal < hig_ns &
+                    TSS.enrichment > low_ts &
+                    nCount_RNA < hig_nCountRNA &
+                    nCount_RNA > low_nCountRNA &
+                    nFeature_RNA < hig_nFeatureRNA &
+                    nFeature_RNA > low_nFeatureRNA &
+                    percent.mt < hig_mt
+  ),
+  features = c('nCount_ATAC', 'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks','nCount_RNA','nFeature_RNA','percent.mt'),
+  pt.size = 0.1,
+  ncol = 5
 )
 ```
 Save our filtered data
-```
+```R
 saveRDS(so_young_filtered, file="so_young_filtered.rds")
 saveRDS(so_old_filtered, file="so_old_filtered.rds")
 ```
-Now we can start with the ATAC analysis ! 
+```
+length(colnames(old))
+[1] 17167
+length(colnames(young))
+[1] 17079
+```
