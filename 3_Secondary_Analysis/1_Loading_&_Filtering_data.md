@@ -2,56 +2,34 @@
 ### Table of content 
  * [Section 1. Mono-modal data analysis of the scMultiome data](#section-1-mono-modal-data-analysis-of-the-scmultiome-data)
    * [0. Import the required packages](#0-import-the-required-packages)
-   * [1. Data Loading & Seurat Object creating](#1-load-the-data-and-create-the-seurat-object)
+   * [1. Load the data and create Seurat object](#1-load-the-data-and-create-seurat-object)
      * [1.1. RNA](#11-RNA)
      * [1.2. ATAC](#12-ATAC)
          * [1.2.1 Create a common peak set](#121-create-a-common-peak-set)
          * [1.2.2 Create fragment objects](#122-create-fragment-objects)
          * [1.2.3 Quantify peaks in each dataset](#123-quantify-peak-in-each-dataset)
          * [1.2.4 Create chromatin assay](#124-create-chromatin-assay)
-           
-   * [Step 2. Quality control](#step-2-quality-control)
-   * [Step 3. Analysis on the RNA assay](#step-3-analysis-on-the-rna-assay)
-   * [Step 4. Analysis on the ATAC assay](#step-4-analysis-on-the-atac-assay)
-     * [Step 4.1. Feature selection](#step-41-feature-selection)
-     * [Step 4.2. Normalization](#step-42-normalization)
-     * [Step 4.3. Linear dimension reduction](#step-43-linear-dimension-reduction)
-     * [Step 4.4. Non-linear dimension reduction with UMAP for visualization](#step-44-non-linear-dimension-reduction-with-umap-for-visualization)
-     * [Step 4.O. What if we don't have the RNA information](#step-4o-what-if-we-dont-have-the-rna-information)
-     * [Step 4.5. Data integration of the ATAC assay](#step-45-data-integration-of-the-atac-assay)
- * [Section 2. Bi-modal integrative analysis of the RNA-ATAC scMultiome data](#section-2-bi-modal-integrative-analysis-of-the-rna-atac-scmultiome-data)
-   * [Step 1. Weighted nearest neighbor analysis](#step-1-weighted-nearest-neighbor-analysis)
-   * [Step 2. Cell type gene/peak marker identification and visualization of the chromatin accessibility profiles](#step-2-cell-type-genepeak-marker-identification-and-visualization-of-the-chromatin-accessibility-profiles)
-   * [Step 3. TF binding motif enrichment analysis](#step-3-tf-binding-motif-enrichment-analysis)
-   * [Step 4. ChromVAR: another motif enrichment analysis](#step-4-chromvar-another-motif-enrichment-analysis)
- * [Section 3. Gene regulatory network reconstruction](#section-3-gene-regulatory-network-reconstruction)
-
-
-
-
-### 0 Import the required packages 
-Make sure all packages are installed
+  
+### 0. Import the required packages 
+We can use a variety of tools to analyze single cell sequencing data, depending on the language we choose and the type of data we wish to examine. Seurat and Signac on R were selected for this tutorial due of their improvements, extensive documentation, and beginner-friendly nature. 
 ```R
 library(Signac)
 library(Seurat)
 library(GenomicRanges)
 ```
-### 1.1 Loading data
-#### 1.2.1 Loading count files
-We will use directly filtered matrix created by cellranger arc.
-For RNA data, its correspond to genes/cell matrix.
-For ATAC data, its correspond to peak/cell matrix. 
+To make the command easier to use later, we may also set the input and output directory paths. 
+```R
+INPUT_DIR = "/path/to/your/data/"
+OUTPUT_DIR ="/path/to/the/results/"
 ```
-INPUT_DIR <- "/path/to/directory/"
-old <- Read10X_h5(filename = paste0(INPUT_DIR,file= "old_filtered_feature_bc_matrix.h5"))
-
-young <- Read10X_h5(filename = paste0(INPUT_DIR,file="young_filtered_feature_bc_matrix.h5"))
-```
-#### 1.2.2 Files preparation
-For ATAC seq data, we will need metadata file and the fragments files to be able using the other function of Signac. 
-The fragment file must be stored in the same folder with .tbi file to be able map the position 
-
-```
+### 1 Load the data and create Seurat object
+#### 1.1. RNA
+Cellranger ARC immediately generates RNA data that correlates to the genes and cell matrix and ATAC data that correlates to the peaks and cell matrix. With low-quality cells and genes/peaks removed, they offer the raw and filtered matrix. 
+We can do the filtering on our own by combining multiple tools, such as [DoubletFinder] (https://github.com/chris-mcginnis-ucsf/DoubletFinder) for gene expression level, [Amulet] (https://github.com/UcarLab/AMULET) for chromatin accessibility information, and [EmptyDropsMultiome] (https://github.com/MarioniLab/EmptyDropsMultiome) to identify low quality droplets (empty droplets) after sequencing.
+The directly filtered matrix produced by Cellranger Arc will be used in this case.
+In addition to importing the filtered matrix for each dataset—old and young—we will first load the meta data, which includes comprehensive information for each modality sequencing result.  
+```R
+# meta data
 old_meta <- read.csv(
   paste0(INPUT_DIR,file = 'old_per_barcode_metrics.csv'),
   header = TRUE,
@@ -61,6 +39,63 @@ young_meta <- read.csv(
   paste0(INPUT_DIR,file = 'young_per_barcode_metrics.csv'),
   header = TRUE,
   row.names = 1)
+
+#Filtered matrix
+old_raw <-Read10X_h5(paste0(INPUT_DIR,"old_filtered_feature_bc_matrix.h5"))
+young_raw <- Read10X_h5(paste0(INPUT_DIR,"young_filtered_feature_bc_matrix.h5"))
+```
+Now we can use these matrix to create the RNA assay in our Seurat objects
+
+```R
+so_old<- CreateSeuratObject(
+  counts = old_raw$`Gene Expression`,
+  assay = "RNA",
+  meta.data = old_meta,
+  project="Old"
+)
+so_young<- CreateSeuratObject(
+  counts = young_raw$`Gene Expression`,
+  assay = "RNA",
+  meta.data = old_meta,
+  project="Young"
+)
+```
+To keep the R environment as light as possible, it is preferable to get rid of the old_raw and young_raw since we won't be using them for our upcoming ATAC assay generation.  
+```R
+rm(young_raw)
+rm(old_raw)  
+gc()  
+```
+
+#### 1.2. ATAC
+##### 1.2.1 Create a common peak set
+As with the RNA assay, we may create our ATAC assay directly from our filtered matrix if we are working with a single dataset. 
+However, ATAC data is more sparse than RNA data, which has a set of genes that are similar across all datasets. Among samples under the same experimental environment, as well as among various datasets, the precision of the Tn5 binding detected by sequencing may differ. In the end, if we wish to compare different conditions, the variance we recorded might come solely from technological noise rather than biological information. Therefore, in order to reach an agreement, we must first establish a shared set of peaks from which we can perform peak calling.  
+Here, we will compare the peak between two conditions—young and old—with additional ATAC data produced by other studies.
+We first import our peaks.
+```R
+peaks <- read.delim(paste0(INPUT_DIR,"/PMC10183972/GSE184851_all_blood_cells_masterpeaklist_anno.txt")[,2:5]
+
+peaks.old <- read.table(
+  file = paste0(INPUT_DIR,"old_atac_peaks.bed"),
+  col.names = c("chr", "start", "end")
+)
+
+peaks.young <- read.table(
+  file = paste0(INPUT_DIR,"young_atac_peaks.bed"),
+  col.names = c("chr", "start", "end")
+)
+```
+Then we convert the table we just imported into genomic ranges objects
+```R
+gr <- makeGRangesFromDataFrame(peaks)
+gr.old <- makeGRangesFromDataFrame(peaks.old)
+gr.young <- makeGRangesFromDataFrame(peaks.young)
+```
+
+How ever, one crucial point is the fragment file must be stored in the same folder with .tbi file to be able map the position.
+```
+
 ```
 
 To identify the peak of open chromatin region, we need a annotation for each regions, so we have to prepare our annotations data
@@ -74,7 +109,6 @@ genome(annotations) <- "mm10"
 #Save the annotations dataset to be able to use it directly next time
 save(annotations,paste0(INPUT_DIR, file="annotations_mm10.rds")) 
 ```
-
 We can also store the path to our fragment files to facilitate the code writing after
 ```
 old_fragpath = paste0(INPUT_DIR,file="old_atac_fragments.tsv.gz")
